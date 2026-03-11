@@ -1,0 +1,24 @@
+<?php
+
+namespace App\Http\Resources;
+
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\JsonResource;
+
+class TourItineraryResource extends JsonResource
+{
+    /**
+     * Transform the resource into an array.
+     *
+     * @return array<string, mixed>
+     */
+    public function toArray(Request $request): array
+    {
+        return [
+            'itinerary_id' => $this->itinerary_id,
+            'day_number'   => $this->day_number,
+            'title'        => $this->title,
+            'description'  => $this->description,
+        ];
+    }
+}
