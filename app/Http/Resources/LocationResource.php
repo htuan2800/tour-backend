@@ -13,6 +13,7 @@ class LocationResource extends JsonResource
         return [
             'location_id' => $this->location_id,
             'name' => $this->name,
+            'slug' => $this->slug,
             'description' => $this->description,
             'image_url' => $this->image_url ? Cloudinary::image($this->image_url)->toUrl() : null,
             'region' => $this->region,

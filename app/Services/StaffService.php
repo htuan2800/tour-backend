@@ -104,14 +104,14 @@ class StaffService
     public function updateStaff(string $id, array $data)
     {
         return DB::transaction(function () use ($id, $data) {
-            $roleName = $data['role'] ?? 'OFFICE_STAFF'; // Mặc định nếu thiếu
+            $roleName = $data['role'];
             $role = Role::where('name', $roleName)->firstOrFail();
             $user = User::where('user_id', $id)->firstOrFail();
             $user->update(
                 [
                     'email' => $data['email'],
                     'password' => isset($data['password']) ? $data['password'] : $user->password,
-                    'role' => $role->role_id,
+                    'role_id' => $role->role_id,
                 ]
             );
             $user->staff()->update([

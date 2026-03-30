@@ -1,6 +1,6 @@
 <?php
 
-
+use App\Http\Controllers\ContactController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AuthController;
@@ -21,11 +21,12 @@ Route::get('/locations/all', [LocationController::class, 'getAllLocation']);
 Route::get('/locations/popular', [LocationController::class, 'getPopularLocations']);
 Route::get('/tours/search', [TourController::class, 'indexForCustomer']);
 Route::get('/tours/{id}', [TourController::class, 'getTourForCustomerById']);
-
-
+Route::get('/locations/get-grouped-locations', [LocationController::class, 'getGroupedLocations']);
+Route::post('/contact', [ContactController::class, 'send']);
 Route::group(['prefix' => 'auth'], function () {
     // Đăng nhập/Đăng ký thường
     Route::post('login', [AuthController::class, 'login']);
+    Route::post('login-admin', [AuthController::class, 'loginForAdmin']);
     Route::post('register', [AuthController::class, 'register']);
     Route::post('refresh', [AuthController::class, 'refresh']);
     Route::post('/forgot-password', [AuthController::class, 'sendResetLinkEmail']);
@@ -41,8 +42,18 @@ Route::group(['prefix' => 'auth'], function () {
 
 Route::group(['middleware' => 'auth:api', 'prefix' => 'auth'], function () {
     Route::get('profile', [AuthController::class, 'me']);
+    Route::post ('change-password', [AuthController::class, 'changePassword']);
     Route::post('logout', [AuthController::class, 'logout']);
 });
+
+Route::group(['middleware' => 'auth:api', 'prefix' => 'users'], function () {
+    Route::put('update-info', [UserController::class, 'updateCurrtentUser']);
+});
+
+Route::group(['middleware' => 'auth:api', 'prefix' => 'bookings'], function () {
+    Route::put('{id}/cancel', [BookingController::class, 'CancelBooking']);
+});
+
 
 Route::group(['middleware' => 'auth:api', 'prefix' => 'files'], function () {
     Route::post('upload', [UploadController::class, 'uploadFile']);
@@ -51,17 +62,21 @@ Route::group(['middleware' => 'auth:api', 'prefix' => 'files'], function () {
 
 Route::post('momo/ipn-handler', [PaymentController::class, 'momoIpn']);
 Route::get('payments/check-status/{orderId}', [PaymentController::class, 'checkStatus']);
-Route::group(['middleware' => 'auth:api', 'prefix' => 'payments'], function () {
+Route::post('payments/retry/{booking_id}', [PaymentController::class, 'retryPayment']);
+Route::group(['prefix' => 'payments'], function () {
     Route::post('checkout', [PaymentController::class, 'checkout']);
 });
+
+Route::get('user-bookings/{id}', [BookingController::class, 'getBookingDetailForCustomer'])->middleware('auth:api');
 Route::group(['middleware' => 'auth:api', 'prefix' => 'bookings'], function () {
     Route::get('user-bookings', [BookingController::class, 'getUserBookings']);
 });
-Route::group(['middleware' => 'auth:api', 'prefix' => 'coupons'], function () {
+Route::group(['prefix' => 'coupons'], function () {
     Route::get('for-payment', [CouponController::class, 'getCouponForPayment']);
 });
 
 Route::get('/tours/tour-schedules/{id}', [TourScheduleController::class, 'getTourScheduleById']);
+Route::get('admin/tours/search', [TourController::class, 'indexForAdmin']);
 // Route::get('/departs', [DepartController::class, 'index']);
 Route::group(['middleware' => ['auth:api'], 'prefix' => 'admin'], function () {
     Route::get('/users/{id}', [UserController::class, 'getUserById']);
@@ -70,6 +85,8 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => 'admin'], function () {
     Route::get('/tours/tour-schedules/{id}', [TourScheduleController::class, 'getTourScheduleById']);
     Route::get('/bookings/{id}', [BookingController::class, 'getBookingDetail']);
     Route::get('/coupons/{id}', [CouponController::class, 'getCouponById']);
+    Route::get('/coupons/detail/{id}', [CouponController::class, 'getCouponDetailById']);
+
 
     Route::get('/staffs/all', [StaffController::class, 'getAllStaff']);
     Route::get('/staffs', [StaffController::class, 'index']);
@@ -122,4 +139,3 @@ Route::group(['middleware' => ['auth:api'], 'prefix' => 'admin'], function () {
 
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 });
-//Route::delete('/users/{id}', [UserController::class, 'destroy']);

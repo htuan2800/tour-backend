@@ -21,6 +21,7 @@ class CouponResource extends JsonResource
             'usage_limit' => $this->usage_limit,
             'usage_count' => $this->usage_count,
             'is_active' => $this->is_active,
+            'bookings' => BookingResource::collection($this->whenLoaded('bookings')),
         ];
     }
 }

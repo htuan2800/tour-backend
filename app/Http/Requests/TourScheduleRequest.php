@@ -20,7 +20,7 @@ class TourScheduleRequest extends FormRequest
     {
         return [
             'tour_id'        => 'required|exists:tours,tour_id',
-            'departure_date' => 'required|date|after_or_equal:today',
+            'departure_date' => 'required|date|after:today',
             'price_adult'    => 'required|numeric|min:0',
             'price_child'    => 'required|numeric|min:0',
             'max_capacity'   => 'required|integer|min:1',
@@ -31,19 +31,19 @@ class TourScheduleRequest extends FormRequest
     {
         return [
             'tour_id.required'        => 'Vui lòng nhập tour_id.',
-            'tour_id.exists'          => 'Tour khong ton tai.',
-            'departure_date.required' => 'Vui lòng nhập departure_date.',
-            'departure_date.date'     => 'departure_date khong hop le.',
-            'departure_date.after_or_equal' => 'departure_date phai lon hon hoac bang ngay hien tai.',
-            'price_adult.required'    => 'Vuiện nhập price_adult.',
-            'price_adult.numeric'     => 'price_adult phai la so.',
-            'price_adult.min'         => 'price_adult phai lon hon hoac bang 0.',
-            'price_child.required'    => 'Vuiện nhập price_child.',
-            'price_child.numeric'     => 'price_child phai la so.',
-            'price_child.min'         => 'price_child phai lon hon hoac bang 0.',
-            'max_capacity.required'   => 'Vuiện nhập max_capacity.',
-            'max_capacity.integer'    => 'max_capacity phai la so nguyen.',
-            'max_capacity.min'        => 'max_capacity phai lon hon hoac bang 1.',
+            'tour_id.exists'          => 'Tour không tồn tại.',
+            'departure_date.required' => 'Vui lòng nhập ngày khởi hành.',
+            'departure_date.date'     => 'ngày khởi hành khong hop le.',
+            'departure_date.after' => 'Ngày khởi hành phải là sau hôm nay.',
+            'price_adult.required'    => 'Vui lòng nhập giá người lớn.',
+            'price_adult.numeric'     => 'Giá người lớn phải là số.',
+            'price_adult.min'         => 'Giá người lớn phải lớn hơn hoặc bằng 0.',
+            'price_child.required'    => 'Vui lòng nhập giá trẻ em.',
+            'price_child.numeric'     => 'Giá trẻ em phải là số.',
+            'price_child.min'         => 'Giá trẻ em phải lớn hơn hoặc bằng 0.',
+            'max_capacity.required'   => 'Vui lòng nhập sức chứa.',
+            'max_capacity.integer'    => 'Sức chứa phải là số nguyên.',
+            'max_capacity.min'        => 'Sức chứa phải lớn hơn hoặc bằng 1.',
         ];
     }
 

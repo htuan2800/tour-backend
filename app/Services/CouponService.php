@@ -51,7 +51,8 @@ class CouponService
                     'usage_limit' => $data['usage_limit'],
                     'usage_count' => 0,
                     'is_active' => true,
-            ]);
+                ]
+            );
             return $coupon;
         });
     }
@@ -59,6 +60,11 @@ class CouponService
     public function findCouponById(string $id)
     {
         return Coupon::findOrFail($id);
+    }
+
+    public function findCouponDetailById(string $id)
+    {
+        return Coupon::with('bookings')->findOrFail($id);
     }
 
     public function updateCoupon(string $id, array $data)

@@ -29,7 +29,7 @@ class RegisterRequest extends FormRequest
             'email'      => 'required|email|unique:users,email',
             'password'   => 'required|string|min:8',
             'fullName'   => 'required|string|max:100',
-            'phone'      => 'required|string',
+            'phone'      => 'required|string|unique:customers,phone',
             'address'    => 'nullable|string|max:255',
             'dateOfBirth' => 'nullable|date',
             // 'role'      => 'required|in:CUSTOMER,SALE_STAFF,OPERATION_STAFF,GUIDE_STAFF',
@@ -50,6 +50,7 @@ class RegisterRequest extends FormRequest
             'fullName.max' => 'Họ và tên không được vượt quá 100 ký tự.',
             'phone.required' => 'Vui lòng nhập số điện thoại.',
             'phone.regex' => 'Số điện thoại không đúng định dạng.',
+            'phone.unique' => 'Số điện thoại này được đăng ký.',
             'address.max' => 'Địa chỉ không được vượt quá 255 ký tự.',
             'dateOfBirth.date' => 'Ngày sinh không đúng định dạng.',
         ];

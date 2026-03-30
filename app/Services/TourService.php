@@ -14,11 +14,112 @@ class TourService
         $this->cloudinaryService = $cloudinaryService;
     }
 
+    public function searchToursByAdmin(array $filters, $sortBy = 'nearest_date', $perPage = 10)
+    {
+
+        $query = Tour::with(['destinations', 'depart', 'schedules' => function ($q) {
+            $q->where('departure_date', '>=', now())->orderBy('departure_date', 'asc')
+                ->where('status', 'OPEN');
+        }])->where('is_active', true);
+
+
+        // 2. LỌC ĐIỂM ĐẾN (Dùng whereHas vì là quan hệ Many-to-Many)
+        if (!empty($filters['destination_id'])) {
+            $query->whereHas('destinations', function ($q) use ($filters) {
+                // Lọc các tour có chứa destination_id này trong bảng trung gian
+                $q->where('tour_destinations.destination_id', $filters['destination_id']);
+            });
+        }
+
+        // 3. LỌC NƠI KHỞI HÀNH (Sửa lại tên cột thành depart_id)
+        if (!empty($filters['departure_id']) && $filters['departure_id'] !== 'all') {
+            $query->where('depart_id', $filters['departure_id']);
+        }
+
+        // Lọc qua bảng Schedules (Ngày đi & Giá)
+        if (!empty($filters['departure_date']) || !empty($filters['price_range'])) {
+            $query->whereHas('schedules', function ($q) use ($filters) {
+
+                // Lọc theo ngày khởi hành
+                if (!empty($filters['departure_date'])) {
+                    $date = Carbon::parse($filters['departure_date'])->format('Y-m-d');
+                    $q->whereDate('departure_date', $date);
+                }
+
+                // Lọc theo khoảng giá (price_range)
+                if (!empty($filters['price_range'])) {
+                    switch ($filters['price_range']) {
+                        case 'under_5':
+                            $q->where('price_adult', '<', 5000000);
+                            break;
+                        case '5_to_10':
+                            $q->whereBetween('price_adult', [5000000, 10000000]);
+                            break;
+                        case '10_to_20':
+                            $q->whereBetween('price_adult', [10000000, 20000000]);
+                            break;
+                        case 'over_20':
+                            $q->where('price_adult', '>', 20000000);
+                            break;
+                    }
+                }
+            });
+        }
+
+        // Sắp xếp
+        switch ($sortBy) {
+            case 'price_asc':
+                $query->withMin('schedules', 'price_adult')->orderBy('schedules_min_price_adult', 'asc');
+                break;
+            case 'price_desc':
+                $query->withMin('schedules', 'price_adult')->orderBy('schedules_min_price_adult', 'desc');
+                break;
+            case 'nearest_date':
+            default:
+                $query->withMin('schedules', 'departure_date')->orderBy('schedules_min_departure_date', 'asc');
+                break;
+        }
+
+        return $query->paginate($perPage);
+    }
+
     public function searchTours(array $filters, $sortBy = 'nearest_date', $perPage = 10)
     {
+        $regionMapping = [
+            'mien-bac' => 'Northern',
+            'mien-trung' => 'Central',
+            'mien-dong-nam-bo' => 'Southeast',
+            'mien-tay-nam-bo' => 'Southwest',
+        ];
+
         $query = Tour::with(['destinations', 'depart', 'schedules' => function ($q) {
-            $q->where('departure_date', '>=', now())->orderBy('departure_date', 'asc');
+            $q->where('departure_date', '>=', now())->orderBy('departure_date', 'asc')
+                ->where('status', 'OPEN');
         }])->where('is_active', true);
+
+        if (!empty($filters['slug'])) {
+            $slug = $filters['slug'];
+
+            // Kiểm tra xem slug truyền vào có phải là Vùng Miền không?
+            if (array_key_exists($slug, $regionMapping)) {
+                
+                // NẾU LÀ VÙNG MIỀN: Tìm các tour có Điểm đến thuộc vùng này
+                $regionValue = $regionMapping[$slug]; 
+                
+                $query->whereHas('destinations', function ($q) use ($regionValue) {
+                    // $q ở đây đại diện cho bảng locations
+                    $q->where('region', $regionValue); 
+                });
+
+            } else {
+                
+                // NẾU LÀ ĐỊA ĐIỂM: Tìm các tour có Điểm đến khớp chính xác với slug này
+                $query->whereHas('destinations', function ($q) use ($slug) {
+                    $q->where('slug', $slug);
+                });
+
+            }
+        }
 
         // 2. LỌC ĐIỂM ĐẾN (Dùng whereHas vì là quan hệ Many-to-Many)
         if (!empty($filters['destination_id'])) {
@@ -121,10 +222,6 @@ class TourService
                         ->orderBy('departure_date', 'asc');
                 },
 
-                // 5. Review (Nếu có tính năng này)
-                // 'reviews' => function ($query) {
-                //    $query->latest()->limit(5);
-                // }
             ])
             ->findOrFail($id);
     }

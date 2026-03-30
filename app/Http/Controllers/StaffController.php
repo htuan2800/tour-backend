@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\UserRequest;
-use App\Http\Requests\UserUpdateRequest;
+use App\Http\Requests\StaffRequest;
+use App\Http\Requests\StaffUpdateRequest;
 use App\Http\Resources\UserResource;
 use App\Services\StaffService;
 use Illuminate\Http\Request;
@@ -48,7 +48,7 @@ class StaffController extends Controller
         );
     }
 
-    public function createStaff(UserRequest $request)
+    public function createStaff(StaffRequest $request)
     {
         $data = $request->validated();
 
@@ -57,7 +57,7 @@ class StaffController extends Controller
         return $this->success($user, 'Tạo người dùng thành công', 201);
     }
 
-    public function updateStaff(UserUpdateRequest $request, string $id)
+    public function updateStaff(StaffUpdateRequest $request, string $id)
     {
         $data = $request->validated();
         $data['user_id'] = $id;

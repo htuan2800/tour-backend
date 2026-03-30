@@ -20,7 +20,7 @@ class TourRequest extends FormRequest
         return [
             'name'    => 'required|max:255',
             'description' => 'required|string',
-            'image_url' => 'required|string',
+            'image_url' => 'string',
             'duration_days' => 'required|integer',
             'duration_nights' => 'required|integer',
             'transportation' => 'required|string',
@@ -40,7 +40,7 @@ class TourRequest extends FormRequest
             'name.required' => 'Vui lòng nhập name.',
             'name.max' => 'Name khong duoc vuot qua 255 ky tu.',
             'description.required' => 'Vui lòng nhập description.',
-            'image_url.required' => 'Vui lòng nhập image_url.',
+            'image_url.string' => 'Image_url phải là một chuỗi.',
         ];
     }
 

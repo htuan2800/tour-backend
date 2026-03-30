@@ -41,6 +41,12 @@ class CouponController extends Controller
         return $this->success(new CouponResource($coupon), 'Thong tin ma giam gia', 200);
     }
 
+    public function getCouponDetailById (string $id) {
+        $coupon = $this->couponService->findCouponDetailById($id);
+        return $this->success(new CouponResource($coupon), 'Thong tin ma giam gia', 200);
+    }
+
+
     public function getCouponForPayment()
     {
         $coupons = $this->couponService->getCouponForPayment();

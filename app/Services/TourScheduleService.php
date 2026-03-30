@@ -10,21 +10,35 @@ use Exception;
 
 class TourScheduleService
 {
-    public function getPaginatedSchedulesByTour($tourId, $limit, $filterType)
+    protected $bookingService;
+
+    // Nhúng BookingService thông qua Dependency Injection
+    public function __construct(BookingService $bookingService)
     {
+        $this->bookingService = $bookingService;
+    }
+    public function getPaginatedSchedulesByTour($tourId, $limit, $status = 'ALL', $timeline = null)
+    {
+        // Tìm Tour để đảm bảo Tour tồn tại (nếu không có sẽ văng lỗi 404 ngay)
         $tour = Tour::findOrFail($tourId);
 
+        // Bắt đầu build query từ relation schedules()
         $query = $tour->schedules();
 
-        if ($filterType === 'upcoming') {
+        if ($status !== 'ALL') {
+            $query->where('status', $status);
+        }
+
+        if ($timeline === 'UPCOMING') {
             $query->where('departure_date', '>=', now())
                 ->orderBy('departure_date', 'asc');
-        } elseif ($filterType === 'history') {
+        } elseif ($timeline === 'HISTORY') {
             $query->where('departure_date', '<', now())
                 ->orderBy('departure_date', 'desc');
         } else {
             $query->orderBy('departure_date', 'desc');
         }
+
         return $query->paginate($limit);
     }
 
@@ -32,53 +46,17 @@ class TourScheduleService
     {
         return TourSchedule::with(['tour'])
             ->where('tour_id', $tourId)
+            ->where('departure_date', '>', now())
+            ->orderBy('departure_date', 'asc')
             ->get();
     }
 
 
     public function findTourScheduleById(string $id)
     {
-        return TourSchedule::with(['tour'])
+        return TourSchedule::with(['tour', 'bookings'])
             ->findOrFail($id);
     }
-
-    // private function checkGuideAvailability($guideId, $start, $end, $ignoreId = null)
-    // {
-    //     $isBusy = TourSchedule::where('guide_id', $guideId)
-    //         // Nếu đang update (có ignoreId), thì loại bỏ record đó ra khỏi query
-    //         ->when($ignoreId, function ($q) use ($ignoreId) {
-    //             $q->where('schedule_id', '!=', $ignoreId);
-    //         })
-    //         // Kiểm tra chồng lấn thời gian (Overlap Logic chuẩn)
-    //         ->where(function ($query) use ($start, $end) {
-    //             // Logic chuẩn để check 2 khoảng thời gian có chạm nhau không:
-    //             // (Ngày đi cũ < Ngày về mới) VÀ (Ngày về cũ > Ngày đi mới)
-    //             $query->where('departure_date', '<', $end)
-    //                 ->where('return_date', '>', $start);
-    //         })
-    //         // Loại bỏ các tour đã bị Hủy (quan trọng)
-    //         ->where('status', '!=', 'CANCELLED')
-    //         ->exists();
-
-    //     if ($isBusy) {
-    //         throw new Exception("Nhân viên này đã có lịch đi tour khác trong khoảng thời gian này!");
-    //     }
-    // }
-
-    // private function checkGuideAvailabilityForUpdate($guideId, $start, $end)
-    // {
-    //     $isBusy = TourSchedule::where('guide_id', $guideId)
-    //         ->where(function ($query) use ($start, $end) {
-    //             // Kiểm tra xem khoảng thời gian mới có chồng lấn với lịch cũ không
-    //             $query->whereBetween('departure_date', [$start, $end])
-    //                 ->orWhereBetween('return_date', [$start, $end]);
-    //         })
-    //         ->exists();
-
-    //     if ($isBusy) {
-    //         throw new Exception("Nhân viên này đã có lịch đi tour khác trong khoảng thời gian này!");
-    //     }
-    // }
 
     public function createTourSchedule(array $data)
     {
@@ -86,11 +64,17 @@ class TourScheduleService
 
         $departureDate = Carbon::parse($data['departure_date']);
 
+        $isExist = TourSchedule::where('tour_id', $data['tour_id'])
+            ->whereDate('departure_date', $departureDate->format('Y-m-d'))
+            ->exists();
+
+        if ($isExist) {
+            throw new Exception('Tour này đã có lịch trình khởi hành vào ngày ' . $departureDate->format('d/m/Y') . '!');
+        }
+
         $returnDate = $departureDate->copy()->addDays($tour->duration_days - 1);
 
         return DB::transaction(function () use ($data, $departureDate, $returnDate) {
-
-            // $this->checkGuideAvailability($data['guide_id'], $departureDate, $returnDate);
 
             return TourSchedule::create([
                 'tour_id'        => $data['tour_id'],
@@ -146,8 +130,22 @@ class TourScheduleService
             throw new \Exception("Tour đã hoàn thành, không thể sửa!");
         }
 
-        $schedule->status = $newStatus;
-        $schedule->save();
+        DB::transaction(function () use ($schedule, $newStatus) {
+            if ($newStatus === 'CANCELLED') {
+
+                $bookings = $schedule->bookings()
+                    ->whereNotIn('status', ['CANCELLED'])
+                    ->get();
+                
+
+                foreach ($bookings as $booking) {
+                    $this->bookingService->updateStatus($booking->booking_id, 'CANCELLED');
+                }
+            }
+
+            $schedule->status = $newStatus;
+            $schedule->save();
+        });
     }
 
     public function deleteTour(Tour $tour): void

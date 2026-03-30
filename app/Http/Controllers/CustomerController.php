@@ -1,6 +1,8 @@
 <?php
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CustomerRequest;
+use App\Http\Requests\CustomerUpdateRequest;
 use App\Http\Requests\UserRequest;
 use App\Http\Requests\UserUpdateRequest;
 use App\Http\Resources\UserResource;
@@ -40,7 +42,7 @@ class CustomerController extends Controller
         ) ;
     }
 
-    public function createCustomer (UserRequest $request)
+    public function createCustomer (CustomerRequest $request)
     {
         $data = $request->validated();
 
@@ -49,7 +51,7 @@ class CustomerController extends Controller
         return $this->success($user, 'Tạo người dùng thành công', 201);
     }
     
-    public function updateCustomer(UserUpdateRequest $request, string $id) {
+    public function updateCustomer(CustomerUpdateRequest $request, string $id) {
         $data = $request->validated();
         $data['user_id'] = $id;
         $customer = $this->customerService->updateCustomer($id, $data);

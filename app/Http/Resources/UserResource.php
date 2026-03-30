@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Illuminate\Support\Carbon;
 
 class UserResource extends JsonResource
 {
@@ -16,11 +17,17 @@ class UserResource extends JsonResource
             $profileData = [
                 'phone' => $this->staff->phone,
                 'address' => $this->staff->address,
+                'date_of_birth' => $this->staff->date_of_birth 
+                    ? Carbon::parse($this->staff->date_of_birth)->format('Y-m-d') 
+                    : null
             ];
         } elseif ($this->customer) {
             $profileData = [
                 'phone' => $this->customer->phone,
                 'address' => $this->customer->address,
+                'date_of_birth' => $this->customer->date_of_birth 
+                    ? Carbon::parse($this->customer->date_of_birth)->format('Y-m-d') 
+                    : null
             ];
         }
 

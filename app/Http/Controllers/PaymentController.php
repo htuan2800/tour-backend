@@ -59,4 +59,14 @@ class PaymentController extends Controller
             return $this->error('Lỗi khi kiểm tra trạng thái: ' . $e->getMessage(), 500);
         }
     }
+
+    public function retryPayment($booking_id)
+    {
+        try {
+            $result = $this->paymentService->retryPayment($booking_id);
+            return $this->success($result, 'Thực hành thanh toán', 200);
+        } catch (Exception $e) {
+            return $this->error('Lỗi khi thực hành thanh toán: ' . $e->getMessage(), 500);
+        }
+    }
 }

@@ -29,6 +29,7 @@ class TourScheduleResource extends JsonResource
                         'image_url' => $this->tour->image_url ? Cloudinary::image($this->tour->image_url)->toUrl() : null,
                     ];
                 }),
+                'bookings' => BookingResource::collection($this->whenLoaded('bookings'))
             ];
     }
 }

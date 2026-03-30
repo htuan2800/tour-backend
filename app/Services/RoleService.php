@@ -16,6 +16,7 @@ class RoleService
     public function getPagenatedRole(int $limit, ?string $search)
     {
         $query = Role::query();
+        $query->whereNotIn('name', ['ADMIN', 'CUSTOMER']);
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->orWhere('name', 'LIKE', "%{$search}%");

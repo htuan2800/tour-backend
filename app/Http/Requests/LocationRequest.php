@@ -18,10 +18,11 @@ class LocationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'    => 'required|max:255',
+            'name'    => 'required|max:255|unique:locations,name',
+            'slug' => 'nullable|string|unique:locations,slug',
             'description' => 'required|string',
             'image_url' => 'required|string',
-            'region' => 'required|in:Northern,Central,Southern',
+            'region' => 'required|in:Northern,Central,Southeast,Southwest',
         ];
     }
 
@@ -30,6 +31,9 @@ class LocationRequest extends FormRequest
         return [
             'name.required' => 'Vui lòng nhập name.',
             'name.max' => 'Name khong duoc vuot qua 255 ky tu.',
+            'name.unique' => 'Name nay da ton tai.',
+            'slug.required' => 'Vui lòng nhập slug.',
+            'slug.unique' => 'Slug nay da ton tai.',
             'description.required' => 'Vui lòng nhập description.',
             'image_url.required' => 'Vui lòng nhập image_url.',
         ];

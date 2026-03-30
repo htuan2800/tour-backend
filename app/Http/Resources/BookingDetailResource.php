@@ -35,11 +35,8 @@ class BookingDetailResource extends JsonResource
             ];
         })->values();
 
-        // 2. Lấy phương thức thanh toán
-        // Booking hasMany Payments, nên ta lấy method của giao dịch đầu tiên/mới nhất
-        $paymentMethod = $this->payments->first() ? $this->payments->first()->payment_method : 'CASH';
+        $paymentMethod = $this->payment ? $this->payment->payment_method : 'CASH';
 
-        // 3. Trả về cấu trúc GIỐNG HỆT Zod Schema
         return [
             'booking_id'    => $this->booking_id,
             'schedule_id'   => (string) $this->schedule_id,
@@ -56,9 +53,12 @@ class BookingDetailResource extends JsonResource
             'children' => $children,
 
             // Vận hành
+            'order_id' => $this->payment ? $this->payment->transaction_code : null,
             'paymentMethod' => $paymentMethod,
+            'paymentStatus' => $this->payment ? $this->payment->payment_status : 'PENDING', // Trạng thái thanh toán nếu có, mặc định là PENDING
             'coupon'   => $this->coupon ? new CouponResource($this->coupon) : null, // Thêm thông tin mã giảm giá nếu có 
             'note'          => $this->note ?? '',
+            'status'        => $this->status,
         ];
     }
 }

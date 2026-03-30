@@ -23,7 +23,8 @@ class BookingController extends Controller
     public function index(Request $request) {
         $limit = $request->query('limit', 10);
         $search = $request->query('search', '');
-        $paginator = $this->bookingService->getPagenatedBooking($limit, $search);
+        $status=$request->query('status', 'ALL');
+        $paginator = $this->bookingService->getPagenatedBooking($limit, $search, $status);
         return $this->success(
             [
                 'data' => BookingResource::collection($paginator),
@@ -43,7 +44,7 @@ class BookingController extends Controller
     public function getUserBookings(Request $request)
     {
         // 1. Thu thập dữ liệu cần thiết từ Request
-        $userId = Auth::user()->user_id; // Hoặc auth()->user()->user_id tùy setup khóa chính của bạn
+        $userId = Auth::user()->user_id; 
         $filters = $request->only(['status', 'search']);
 
         // 2. Gọi Service xử lý logic
@@ -69,6 +70,18 @@ class BookingController extends Controller
     public function getBookingDetail(string $id) {
         $booking = $this->bookingService->findBookingById($id);
         return $this->success(new BookingDetailResource($booking), 'Thông tin booking', 200);
+    }
+
+    public function getBookingDetailForCustomer(string $id) {
+        $userId = Auth::user()?->user_id; 
+        if ($userId == null) {
+            return $this->error('Vui lớng đăng nhập', 401);
+        }
+        $booking = $this->bookingService->getBookingDetailForCustomer($id, $userId);
+        if ($booking == null) {
+            return $this->error('Đơn hàng không tồn tại hoặc không có quyền truy cập', 404);
+        }
+        return $this->success(new BookingDetailResource($booking), 'Thông tin booking', 200);
     }
 
     public function create(BookingRequest $request)
@@ -105,6 +118,12 @@ class BookingController extends Controller
         $newStatus = $request->input('status');
         $booking = $this->bookingService->updateStatus($id, $newStatus);
 
+        return $this->success(new BookingResource($booking), 'Cập nhật trạng thái thành công', 200);
+    }
+
+    public function CancelBooking(string $id)
+    {
+        $booking = $this->bookingService->updateStatus($id, 'CANCELLED');
         return $this->success(new BookingResource($booking), 'Cập nhật trạng thái thành công', 200);
     }
 }

@@ -28,6 +28,11 @@ class LocationController extends Controller
         return $this->success(LocationResource::collection($locations)->resolve(), 'Danh sách điểm đến phổ biến', 200);
     }
 
+    public function getGroupedLocations () {
+        $locations = $this->locationService->getGroupedLocations();
+        return $this->success($locations, 'Danh sach diem den', 200);
+    }
+
     public function index (Request $request)
     {
         $limit  = $request->input('limit', 10);

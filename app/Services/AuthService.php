@@ -14,6 +14,8 @@ use Carbon\Carbon;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 
 class AuthService
 {
@@ -42,6 +44,65 @@ class AuthService
 
             return $user;
         });
+    }
+
+    public function login(array $credentials, string $page)
+    {
+        $user = User::withTrashed()->where('email', $credentials['email'])->first();
+
+        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+            return ['success' => false, 'message' => 'Email hoặc mật khẩu không đúng.', 'code' => 401];
+        }
+
+        if ($user->trashed()) {
+            return ['success' => false, 'message' => 'Tài khoản của bạn đã bị xóa khỏi hệ thống.', 'code' => 403];
+        }
+
+        $roleName = $user->role->name ?? '';
+        if ($page == "admin") {
+            $notAllowedRoles = ['CUSTOMER'];
+            if (in_array($roleName, $notAllowedRoles)) {
+                return ['success' => false, 'message' => 'Tài khoản của bạn không có quyền truy cập vào khu vực này.', 'code' => 403];
+            }
+        } else {
+            $allowedRoles = ['CUSTOMER', 'ADMIN'];
+            if (!in_array($roleName, $allowedRoles)) {
+                return ['success' => false, 'message' => 'Tài khoản của bạn không có quyền truy cập vào khu vực này.', 'code' => 403];
+            }
+        }
+
+        if (!$user->hasVerifiedEmail()) {
+            event(new Registered($user));
+            return [
+                'success' => false,
+                'message' => 'Tài khoản chưa kích hoạt. Vui lòng kiểm tra email.',
+                'code' => 403,
+                'data' => ['email' => $user->email] // Trả về data để Frontend hiện nút "Gửi lại mail"
+            ];
+        }
+
+        if (!$user->is_active) {
+            return ['success' => false, 'message' => 'Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ hỗ trợ.', 'code' => 403];
+        }
+
+        // 7. Vượt qua mọi chốt chặn -> Đăng nhập và tạo Token
+        /** @var \Tymon\JWTAuth\JWTGuard $guard */
+        $guard = Auth::guard('api');
+
+        // Gọi attempt để Laravel ghi nhận trạng thái đăng nhập hợp lệ
+        $guard->attempt($credentials);
+
+        $guard->factory()->setTTL(60);
+        $accessToken = $guard->login($user);
+
+        $guard->factory()->setTTL(60 * 24 * 365);
+        $refreshToken = $guard->login($user);
+
+        return [
+            'success' => true,
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshToken,
+        ];
     }
 
     public function loginWithSocial(string $providerName, $socialUser)
@@ -76,7 +137,7 @@ class AuthService
                 'password'          => null,
                 'role_id'           => $customerRole->role_id,
                 'is_active'         => true,
-                'email_verified_at' => now(), 
+                'email_verified_at' => now(),
             ]);
 
             $user->customer()->create([

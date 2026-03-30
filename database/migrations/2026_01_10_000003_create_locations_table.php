@@ -14,8 +14,9 @@ return new class extends Migration
         Schema::create('locations', function (Blueprint $table) {
             $table->id('location_id');
             $table->string('name');
+            $table->string('slug');
             $table->text('description')->nullable();
-            $table->enum('region', ['Northern', 'Central', 'Southern']);
+            $table->enum('region', ['Northern', 'Central', 'Southeast', 'Southwest']);
             $table->string('image_url')->nullable();
             $table->boolean('is_active')->default(true);
             $table->softDeletes();

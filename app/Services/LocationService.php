@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Location;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class LocationService
 {
@@ -37,6 +38,29 @@ class LocationService
         return $query->orderBy('location_id', 'DESC')->paginate($limit);
     }
 
+    public function getGroupedLocations()
+    {
+        $locations = Location::where('is_active', true)
+                             ->get();
+
+        $groupedByRegion = $locations->groupBy('region')->map(function ($group) {
+            return $group->take(5)->map(function ($item) {
+                // Tạo ra một object mới chứa cả id và name
+                return [
+                    'slug' => $item->slug,
+                    'name'        => $item->name,
+                ];
+            })->values()->toArray(); 
+        });
+
+        return [
+            'mien-bac'  => $groupedByRegion->get('Northern', []),
+            'mien-trung'  => $groupedByRegion->get('Central', []),
+            'mien-dong-nam-bo' => $groupedByRegion->get('Southeast', []),
+            'mien-tay-nam-bo' => $groupedByRegion->get('Southwest', []),
+        ];
+    }
+
 
     public function findLocationById(string $id)
     {
@@ -47,8 +71,11 @@ class LocationService
     public function createLocation(array $data)
     {
         return DB::transaction(function () use ($data) {
+            $rawSlug = !empty($data['slug']) ? $data['slug'] : $data['name'];
+            $cleanSlug = Str::slug($rawSlug);
             $location = Location::create([
                 'name'     => $data['name'],
+                'slug'     => $cleanSlug,
                 'description' => $data['description'],
                 'image_url' => $data['image_url'],
                 'region' => $data['region'],
@@ -71,9 +98,13 @@ class LocationService
                     throw new \Exception("Lỗi: " . $e->getMessage());
                 }
             }
+
+            $rawSlug = !empty($data['slug']) ? $data['slug'] : $data['name'];
+            $cleanSlug = Str::slug($rawSlug);
             $location->update(
                 [
                     'name' => $data['name'],
+                    'slug' => $cleanSlug,
                     'description' => $data['description'],
                     'region' => $data['region'],
                     'image_url' => isset($data['image_url']) ? $data['image_url'] : $location->image_url

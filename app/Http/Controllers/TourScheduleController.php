@@ -22,8 +22,9 @@ class TourScheduleController extends Controller
     public function index(Request $request, $tourId) // Nhận $tourId từ URL
     {
         $limit = $request->query('limit', 10);
-        $filterType = $request->query('filter_type', 'upcoming');
-        $paginator = $this->tourScheduleService->getPaginatedSchedulesByTour($tourId, $limit, $filterType);
+        $status=$request->query('status', 'ALL');
+        $timeline = $request->query('timeline', 'ALL');
+        $paginator = $this->tourScheduleService->getPaginatedSchedulesByTour($tourId, $limit, $status, $timeline);
 
         return $this->success(
             [

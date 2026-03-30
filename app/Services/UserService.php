@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-
+use Exception;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 class UserService
 {
     public function getPaginatedUsers(int $limit, ?string $search, $roleFilter = null): LengthAwarePaginator
@@ -70,7 +72,7 @@ class UserService
                 'is_active' => true,
             ]);
 
-            if($user->role === 'CUSTOMER') {
+            if ($user->role === 'CUSTOMER') {
                 $user->customer()->create([
                     'user_id' => $user->id,
                     'full_name' => $data['full_name'] ?? '',
@@ -89,6 +91,44 @@ class UserService
             }
 
             return $user;
+        });
+    }
+
+    public function updateUser(array $data)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        if (!$user) {
+            throw new Exception("Không tìm thấy thông tin phiên đăng nhập.");
+        }
+
+        return DB::transaction(function () use ($user, $data) {
+            if ($user->customer) {
+
+                $customerData = [
+                    'full_name' => $data['full_name'] ?? $user->customer->full_name,
+                    'phone'     => $data['phone'] ?? $user->customer->phone,
+                    'address'   => $data['address'] ?? $user->customer->address,
+                ];
+
+                if (!empty($data['date_of_birth'])) {
+                    $customerData['date_of_birth'] = Carbon::parse($data['date_of_birth'])->format('Y-m-d');
+                }
+
+                $user->customer()->update($customerData);
+            } elseif ($user->staff) {
+                $user->staff()->update([
+                    'full_name' => $data['full_name'] ?? $user->staff->full_name,
+                    'phone'     => $data['phone'] ?? $user->staff->phone,
+                    'address'   => $data['address'] ?? $user->staff->address,
+                ]);
+
+                if (!empty($data['date_of_birth'])) {
+                    $user->staff()->update(['date_of_birth' => Carbon::parse($data['date_of_birth'])->format('Y-m-d')]);
+                }
+            }
+            return $user->load(['customer', 'staff', 'role']);
         });
     }
 

@@ -27,7 +27,7 @@ class PermissionSeeder extends Seeder
              // Quyền Khách hàng
             ['name' => 'customer.view', 'display_name' => 'Xem Khách hàng', 'feature_id' => $customerFunc],
             ['name' => 'customer.create', 'display_name' => 'Tạo Khách hàng', 'feature_id' => $customerFunc],
-            ['name' => 'customer.update', 'display_name' => 'Chình sửa Khách hàng', 'feature_id' => $customerFunc],
+            ['name' => 'customer.update', 'display_name' => 'Chỉnh sửa Khách hàng', 'feature_id' => $customerFunc],
             ['name' => 'customer.delete', 'display_name' => 'Xóa Khách hàng', 'feature_id' => $customerFunc],
             ['name' => 'customer.status', 'display_name' => 'Thay đổi trạng thái Khách hàng', 'feature_id' => $customerFunc],
 
@@ -55,13 +55,13 @@ class PermissionSeeder extends Seeder
             // Quyền Tour lịch trình
             ['name' => 'tour_schedule.view', 'display_name' => 'Xem Tour lịch trình', 'feature_id' => $tourScheduleFunc],
             ['name' => 'tour_schedule.create', 'display_name' => 'Tạo Tour lịch trình', 'feature_id' => $tourScheduleFunc],
-            ['name' => 'tour_schedule.update', 'display_name' => 'Chình sửa Tour lịch trình', 'feature_id' => $tourScheduleFunc],
+            ['name' => 'tour_schedule.update', 'display_name' => 'Chỉnh sửa Tour lịch trình', 'feature_id' => $tourScheduleFunc],
             ['name' => 'tour_schedule.status', 'display_name' => 'Thay đổi trạng thái Tour lịch trình', 'feature_id' => $tourScheduleFunc],
             
             // Quyền Coupon
             ['name' => 'coupon.view', 'display_name' => 'Xem Coupon', 'feature_id' => $couponFunc],
             ['name' => 'coupon.create', 'display_name' => 'Tạo Coupon', 'feature_id' => $couponFunc],
-            ['name' => 'coupon.update', 'display_name' => 'Chình sửa Coupon', 'feature_id' => $couponFunc],
+            ['name' => 'coupon.update', 'display_name' => 'Chỉnh sửa Coupon', 'feature_id' => $couponFunc],
             ['name' => 'coupon.delete', 'display_name' => 'Xóa Coupon', 'feature_id' => $couponFunc],
             ['name' => 'coupon.status', 'display_name' => 'Thay đổi trạng thái Coupon', 'feature_id' => $couponFunc],
 

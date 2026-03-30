@@ -20,12 +20,12 @@ class BookingRequest extends FormRequest
     {
         return [
             'tour_id' => 'required|exists:tours,tour_id',
-            'departure_id' => 'required|exists:locations,location_id',
             'destination_id' => 'required|exists:locations,location_id',
             'schedule_id'           => 'required|exists:tour_schedules,schedule_id', 
             'contact.fullName'      => 'required|string|max:255',
             'contact.phone'         => 'required|string|max:20',
             'contact.email'         => 'required|email',
+            'contact.address'       => 'required|string|max:255',
             'adults'                => 'required|array|min:1',
             'adults.*.fullName'     => 'required|string|max:255',
             'adults.*.dob'          => 'required|date',
@@ -42,8 +42,6 @@ class BookingRequest extends FormRequest
         return [
             'tour_id.required' => 'Vui lòng chọn tour.',
             'tour_id.exists'   => 'Tour không tồn tại.',
-            'departure_id.required' => 'Vui lòng chọn điểm khởi hành.',
-            'departure_id.exists'   => 'Điểm khởi hành không tồn tại.',
             'destination_id.required' => 'Vui lòng chọn điểm đến.',
             'destination_id.exists'   => 'Điểm đến không tồn tại.',
             'schedule_id.required' => 'Vui lòng chọn lịch trình.',
@@ -52,6 +50,8 @@ class BookingRequest extends FormRequest
             'contact.phone.required'    => 'Vui lòng nhập số điện thoại người liên hệ.',
             'contact.email.required'    => 'Vui lòng nhập email người liên hệ.',
             'contact.email.email'       => 'Email người liên hệ không đúng định dạng.',
+            'contact.address.required'  => 'Vui lòng nhập địa chỉ người liên hệ.',
+            'contact.address.max'       => 'Địa chỉ người liên hệ không được vượt quá 255 ký tự.',
             'adults.required'           => 'Vui lòng thêm ít nhất một hành khách người lớn.',
             'adults.*.fullName.required'=> 'Vui lòng nhập họ tên cho tất cả hành khách người lớn.',
             'adults.*.dob.required'     => 'Vui lòng nhập ngày sinh cho tất cả hành khách người lớn.',

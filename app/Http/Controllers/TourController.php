@@ -21,13 +21,39 @@ class TourController extends Controller
     {
         // Thu thập các bộ lọc từ Query Params của URL
         $filters = $request->only([
-            'destination_id', 'departure_id', 'departure_date', 
-            'price_range', 'category', 'transportation'
+            'slug', 'departure_id', 'departure_date', 
+            'price_range'
         ]);
         
         $sortBy = $request->input('sort_by', 'nearest_date');
 
         $tours = $this->tourService->searchTours($filters, $sortBy);
+
+        return $this->success(
+            [
+                'data' => TourResource::collection($tours)->resolve(),
+                'meta' => [
+                    'totalItems'   => $tours->total(),
+                    'currentPage'  => $tours->currentPage(),
+                    'totalPages'   => $tours->lastPage(),
+                ]
+            ],
+            'Lấy danh sách tour thành công',
+            200
+        );
+    }
+
+    public function indexForAdmin(Request $request)
+    {
+        // Thu thập các bộ lọc từ Query Params của URL
+        $filters = $request->only([
+            'destination_id', 'departure_id', 'departure_date', 
+            'price_range'
+        ]);
+        
+        $sortBy = $request->input('sort_by', 'nearest_date');
+
+        $tours = $this->tourService->searchToursByAdmin($filters, $sortBy);
 
         return $this->success(
             [

@@ -13,6 +13,7 @@ class Location extends Model
 
     protected $fillable = [
         'name', 
+        'slug',
         'description', 
         'region',
         'image_url',

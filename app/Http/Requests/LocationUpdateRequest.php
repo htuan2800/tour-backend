@@ -6,6 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use App\Traits\ApiResponse; 
+use Illuminate\Validation\Rule;
 class LocationUpdateRequest extends FormRequest
 {
     use ApiResponse;
@@ -17,10 +18,20 @@ class LocationUpdateRequest extends FormRequest
 
     public function rules(): array
     {
+        $locationId = $this->route('id');
         return [
-            'name'    => 'required|max:255',
+            'name' => [
+                'required',
+                'max:255',
+                Rule::unique('locations', 'name')->ignore($locationId, 'location_id') 
+            ],
+            'slug' => [
+                'nullable',
+                'string',
+                Rule::unique('locations', 'slug')->ignore($locationId, 'location_id')
+            ],
             'description' => 'required|string',
-            'region' => 'required|in:Northern,Central,Southern',
+            'region' => 'required|in:Northern,Central,Southeast,Southwest',
             'image_url' => 'nullable|string',
         ];
     }
@@ -30,7 +41,10 @@ class LocationUpdateRequest extends FormRequest
         return [
             'name.required' => 'Vui lòng nhập name.',
             'name.max' => 'Name khong duoc vuot qua 255 ky tu.',
+            'slug.required' => 'Vui lòng nhập slug.',
+            'slug.unique' => 'Slug nay da ton tai.',
             'description.required' => 'Vui lòng nhập description.',
+            'region.in' => 'Vùng miền không hợp lệ.',
         ];
     }
 

@@ -12,14 +12,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('bookings', function (Blueprint $table) {
-            $table->id('booking_id');
-            $table->string('booking_code');
+            $table->string('booking_id', 50)->primary();
             $table->unsignedBigInteger('user_id')->nullable(); // Người đặt
             $table->unsignedBigInteger('schedule_id');
             $table->unsignedBigInteger('coupon_id')->nullable();
             $table->string('contact_fullName');
             $table->string('contact_phone');
             $table->string('contact_email');
+            $table->string('contact_address');
             
             $table->timestamp('booking_date')->useCurrent();
             $table->decimal('applied_price_adult', 15, 2);

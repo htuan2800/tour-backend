@@ -10,7 +10,6 @@ use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\ResetPasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Services\AuthService;
 use App\Services\UserService;
 use Illuminate\Auth\Events\Verified;
@@ -21,6 +20,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Str;
+
 class AuthController extends Controller
 {
     protected $authService;
@@ -51,29 +51,27 @@ class AuthController extends Controller
     public function login(LoginRequest $request)
     {
         $credentials = $request->only('email', 'password');
+        $result = $this->authService->login($credentials, 'customer');
 
-        /** @var JWTGuard $guard */
-        $guard = Auth::guard('api');
-
-        if (!$guard->attempt($credentials)) {
-            return $this->error('Email hoặc mật khẩu không đúng', 401);
+        if (!$result['success']) {
+            $data = $result['data'] ?? []; 
+            return $this->error($result['message'], $result['code'], $data);
         }
 
-        $user = $guard->user();
+        return $this->respondWithTokens($result['access_token'], $result['refresh_token']);
+    }
 
-        if (! $user->hasVerifiedEmail()) {
-            $guard->logout();
-            return $this->error('Tài khoản chưa kích hoạt. Vui lòng kiểm tra email.', 403, [
-                'email' => $user->email
-            ]);
+    public function loginForAdmin(LoginRequest $request)
+    {
+        $credentials = $request->only('email', 'password');
+        $result = $this->authService->login($credentials, 'admin');
+
+        if (!$result['success']) {
+            $data = $result['data'] ?? []; 
+            return $this->error($result['message'], $result['code'], $data);
         }
-        $guard->factory()->setTTL(60);
-        $accessToken = $guard->login($user);
 
-        $guard->factory()->setTTL(60 * 24 * 365);
-        $refreshToken = $guard->login($user);
-
-        return $this->respondWithTokens($accessToken, $refreshToken);
+        return $this->respondWithTokens($result['access_token'], $result['refresh_token']);
     }
 
     // API lấy thông tin user
@@ -348,5 +346,24 @@ class AuthController extends Controller
         }
 
         return $this->error('Đặt lại mật khẩu thất bại: ' . __($status), 400);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'old_password' => 'required',
+            'new_password' => 'required|min:8|confirmed',
+        ]);
+
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        if (!Hash::check($request->old_password, $user->password)) {
+            return $this->error('Mật khâu không hợp lệ', 400);
+        }
+
+        $user->password = Hash::make($request->new_password);
+        $user->save();
+
+        return $this->success(null, 'Mật khâu đã đổi.');
     }
 }

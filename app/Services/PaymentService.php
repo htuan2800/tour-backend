@@ -2,31 +2,41 @@
 
 namespace App\Services;
 
+use App\Http\Resources\BookingResource;
+use App\Mail\BookingStatusMail;
 use App\Models\Booking;
 use App\Models\Coupon;
 use App\Models\Payment;
 use App\Models\TourSchedule;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class PaymentService
 {
     private $momoService;
+    private $bookingService;
 
     // Inject MomoService vào đây
-    public function __construct(MomoService $momoService)
+    public function __construct(MomoService $momoService, BookingService $bookingService)
     {
         $this->momoService = $momoService;
+        $this->bookingService = $bookingService;
     }
 
     public function processBooking(array $data)
     {
         return DB::transaction(function () use ($data) {
             // 1. Lấy thông tin lịch trình & Tính tổng tiền BẢO MẬT TỪ BACKEND
+            $booking_date = now();
             $schedule = TourSchedule::findOrFail($data['schedule_id']);
+            if ($schedule->departure_date < $booking_date) {
+                throw new Exception("Qúa hạn đặt tour!");
+            }
             $adultCount = count($data['adults']);
             $childCount = isset($data['children']) ? count($data['children']) : 0;
             $totalAmount = ($adultCount * $schedule->price_adult) + ($childCount * $schedule->price_child);
@@ -65,17 +75,19 @@ class PaymentService
             $finalAmount = max(0, $originalAmount - $discountAmount);
 
             $schedule->increment('current_booked', $adultCount + $childCount);
+            $user = User::where('email', $data['contact']['email'])
+                // ->has('customer')
+                ->first();
+            $userId = $user?->user_id;
 
-            // Tùy chọn: Xử lý trừ tiền nếu có voucherCode ở đây...
-            $uniqueOrderCode = 'TOUR_' . time() . '_' . Str::random(5);
             $booking = Booking::create([
-                'booking_code' => $uniqueOrderCode,
-                'user_id'       => Auth::user()?->user_id, // Lấy user_id từ token đã xác thực
+                'user_id'       => $userId, // Lấy user_id từ token đã xác thực
                 'schedule_id'   => $schedule->schedule_id,
                 'coupon_id'       => $appliedCouponId,
                 'contact_fullName' => $data['contact']['fullName'],
                 'contact_phone' => $data['contact']['phone'],
                 'contact_email' => $data['contact']['email'],
+                'contact_address' => $data['contact']['address'],
                 'applied_price_adult' => $schedule->price_adult,
                 'applied_price_children' => $schedule->price_child,
                 'number_of_adults' => $adultCount,
@@ -86,6 +98,7 @@ class PaymentService
                 'payment_method' => $data['paymentMethod'],
                 'status'        => 'PENDING',
                 'note'          => $data['note'] ?? null,
+                'booking_date'  => $booking_date,
             ]);
 
             // 3. Lưu danh sách hành khách vào bảng phụ (passengers)
@@ -100,11 +113,20 @@ class PaymentService
             }
             $booking->passengers()->createMany($passengers);
 
+            $uniquePaymentCode = 'PAYMENT_' . time() . '_' . Str::random(5);
             // 4. Xử lý phương thức thanh toán
             if ($data['paymentMethod'] === 'MOMO') {
-                // Gọi sang MomoService tạo link thanh toán, truyền tổng tiền và mã Booking
-                $payUrl = $this->momoService->createPayment($finalAmount, $booking->booking_code);
-
+                // Gọi sang MomoService tạo link thanh toán
+                $payUrl = $this->momoService->createPayment($finalAmount, $uniquePaymentCode);
+                Payment::create([
+                    'booking_id'     => $booking->booking_id, // Lấy ID nội bộ
+                    'amount'         => $finalAmount,
+                    'payment_method' => 'MOMO',
+                    'transaction_id' => null,
+                    'transaction_code' => $uniquePaymentCode,
+                    'payment_status' => 'PENDING',
+                ]);
+                Mail::to($booking->contact_email)->send(new BookingStatusMail($booking));
                 return [
                     'message' => 'Vui lòng thanh toán để hoàn tất',
                     'payUrl'  => $payUrl
@@ -116,11 +138,12 @@ class PaymentService
                     'amount'         => $finalAmount,
                     'payment_method' => 'CASH',
                     'transaction_id' => null,
+                    'transaction_code' => $uniquePaymentCode,
                     'payment_status' => 'PENDING',
                 ]);
+                Mail::to($booking->contact_email)->send(new BookingStatusMail($booking));
                 return [
                     'message' => 'Đặt tour thành công, vui lòng thanh toán tại quầy!',
-                    'payUrl'  => url("/booking-success?code=" . $booking->booking_code)
                 ];
             }
         });
@@ -159,8 +182,8 @@ class PaymentService
         }
 
         return DB::transaction(function () use ($data) {
-            $booking = Booking::where('booking_code', $data['orderId'])->first();
-
+            $payment = Payment::where('transaction_code', $data['orderId'])->first();
+            $booking = Booking::where('booking_id', $payment->booking_id)->first();
             if (!$booking) {
                 Log::error('MoMo IPN: Không tìm thấy mã đơn hàng ' . $data['orderId']);
                 return false;
@@ -170,21 +193,23 @@ class PaymentService
                 return true;
             }
 
-            if ($data['resultCode'] == 0) {
-                $booking->update(['status' => 'VERIFYING']);
+            if ($payment && $payment->payment_status === 'COMPLETED') {
+                return true;
+            }
 
-                Payment::create([
-                    'booking_id'     => $booking->booking_id, // Lấy ID nội bộ
-                    'amount'         => $data['amount'],
-                    'payment_method' => 'MOMO',
-                    'transaction_id' => $data['transId'], // Mã giao dịch của MoMo (Dùng đối soát sau này)
-                    'payment_status'         => 'COMPLETED',
+            if ($data['resultCode'] == 0) {
+                $this->bookingService->updateStatus($booking->booking_id, 'VERIFYING');
+
+                $payment->update([
+                    'transaction_id' => $data['transId'], // Cập nhật mã GD thật của MoMo
                 ]);
 
                 Log::info('MoMo IPN: Thanh toán thành công đơn ' . $booking->booking_code);
             } else {
-                // Khách hủy thanh toán hoặc quẹt thẻ lỗi
-                $booking->update(['status' => 'FAILED']); // Hoặc CANCELLED
+                $this->bookingService->updateStatus($booking->booking_id, 'CANCELLED');
+                $payment->update([
+                    'payment_status' => 'FAILED',
+                ]);
                 Log::info('MoMo IPN: Khách hủy hoặc lỗi đơn ' . $booking->booking_code);
             }
 
@@ -194,12 +219,32 @@ class PaymentService
 
     public function checkPaymentStatus($orderId)
     {
-        $booking = Booking::where('booking_code', $orderId)->first();
+        $payment = Payment::where('transaction_code', $orderId)->first();
 
-        if (!$booking) {
+        if (!$payment) {
             throw new Exception('Không tìm thấy đơn hàng');
         }
 
-        return $booking->status; // PENDING, PAID, hoặc FAILED
+        return $payment->payment_status;
+    }
+
+
+    public function retryPayment($order_id)
+    {
+        $payment = Payment::where('transaction_code', $order_id)->first();
+        $amount = (int) round($payment->booking->total_price);
+        $uniquePaymentCode = 'PAYMENT_' . time() . '_' . Str::random(5);
+        if ($payment) {
+            $payment->update([
+                'transaction_code' => $uniquePaymentCode, // Lưu lại để tí nữa IPN về còn biết đường tìm
+                'payment_status' => 'PENDING'
+            ]);
+        }
+        $payUrl = $this->momoService->createPayment($amount, $uniquePaymentCode);
+
+        return [
+            'message' => 'Vui lòng thanh toán để hoàn tất',
+            'payUrl'  => $payUrl
+        ];
     }
 }

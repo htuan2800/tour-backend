@@ -3,23 +3,26 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+use Illuminate\Support\Str;
 class Booking extends Model
 {
     protected $primaryKey = 'booking_id';
     
-    // Laravel mặc định tìm cột created_at và updated_at. 
-    // DB bạn chỉ có booking_date, nên cần tắt timestamps chuẩn
+    public $incrementing = false; 
+    
+    protected $keyType = 'string'; 
+    
     public $timestamps = false; 
 
     protected $fillable = [
-        'booking_code',
+        'booking_id',
         'user_id',
         'schedule_id',
         'coupon_id',
         'contact_fullName',
         'contact_phone',
         'contact_email',
+        'contact_address',
         'booking_date',
         'applied_price_adult',
         'number_of_adults', 
@@ -48,11 +51,22 @@ class Booking extends Model
         return $this->hasMany(Passenger::class, 'booking_id');
     }
 
-    public function payments() {
-        return $this->hasMany(Payment::class, 'booking_id');
+    public function payment() {
+        return $this->hasOne(Payment::class, 'booking_id');
     }
 
     public function coupon() {
         return $this->belongsTo(Coupon::class, 'coupon_id');
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->booking_id)) {
+                $model->booking_id = 'TOUR_' . time() . '_' . Str::random(5);
+            }
+        });
     }
 }

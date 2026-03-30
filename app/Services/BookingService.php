@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Mail\BookingStatusMail;
 use App\Models\Booking;
 use App\Models\Coupon;
 use App\Models\Payment;
@@ -10,6 +11,8 @@ use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class BookingService
@@ -32,7 +35,7 @@ class BookingService
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
-                $q->where('booking_code', 'LIKE', "%{$search}%")
+                $q->where('booking_id', 'LIKE', "%{$search}%")
                     ->orWhereHas('schedule.tour', function ($qTour) use ($search) {
                         $qTour->where('name', 'LIKE', "%{$search}%");
                     });
@@ -42,9 +45,22 @@ class BookingService
         return $query->paginate($perPage);
     }
 
-    public function getPagenatedBooking(int $limit, ?string $search)
+    public function getBookingDetailForCustomer($bookingId, $userId)
+    {
+
+        return Booking::with(['schedule.tour', 'passengers', 'payment', 'coupon'])
+            ->where('user_id', $userId)
+            ->where('booking_id', $bookingId) // Đừng quên thêm điều kiện tìm ID
+            ->first();
+    }
+
+    public function getPagenatedBooking(int $limit, ?string $search, string $status = 'ALL')
     {
         $query = Booking::with('user');
+
+        if ($status !== 'ALL') {
+            $query->where('status', $status);
+        }
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -52,8 +68,8 @@ class BookingService
                     ->orWhere('contact_fullName', 'LIKE', "%{$search}%")
                     ->orWhere('contact_phone', 'LIKE', "%{$search}%")
                     ->orWhere('contact_email', 'LIKE', "%{$search}%")
-                    ->orWhereHas('user', function ($qUser) use ($search) {
-                        $qUser->where('fullName', 'LIKE', "%{$search}%");
+                    ->orWhereHas('user.customer', function ($customerQuery) use ($search) {
+                        $customerQuery->where('full_name', 'LIKE', "%{$search}%");
                     });
             });
         }
@@ -63,15 +79,18 @@ class BookingService
 
     public function findBookingById(string $id)
     {
-        return Booking::with(['schedule.tour', 'passengers', 'payments', 'coupon'])->findOrFail($id);
+        return Booking::with(['schedule.tour', 'passengers', 'payment', 'coupon'])->findOrFail($id);
     }
 
 
     public function createBooking(array $data)
     {
         return DB::transaction(function () use ($data) {
-            // 1. Lấy thông tin lịch trình & Tính tổng tiền BẢO MẬT TỪ BACKEND
+            $booking_date = now();
             $schedule = TourSchedule::findOrFail($data['schedule_id']);
+            if($schedule->departure_date < $booking_date) {
+                throw new Exception("Qúa hạn đặt tour!");
+            }
             $adultCount = count($data['adults']);
             $childCount = isset($data['children']) ? count($data['children']) : 0;
             $totalAmount = ($adultCount * $schedule->price_adult) + ($childCount * $schedule->price_child);
@@ -107,23 +126,17 @@ class BookingService
             $finalAmount = max(0, $originalAmount - $discountAmount);
             $schedule->increment('current_booked', $adultCount + $childCount);
 
-            // Tùy chọn: Xử lý trừ tiền nếu có voucherCode ở đây...
-            $uniqueOrderCode = 'TOUR_' . time() . '_' . Str::random(5);
             $user = User::where('email', $data['contact']['email'])
-                ->whereHas('customer', function ($query) use ($data) {
-                    // Tìm tên và SĐT ở bảng customers
-                    $query->where('full_name', $data['contact']['fullName'])
-                        ->where('phone', $data['contact']['phone']);
-                })
+                ->has('customer')
                 ->first();
             $booking = Booking::create([
-                'booking_code' => $uniqueOrderCode,
                 'user_id'       => $user?->user_id,
                 'schedule_id'   => $schedule->schedule_id,
                 'coupon_id'       => $appliedCouponId,
                 'contact_fullName' => $data['contact']['fullName'],
                 'contact_phone' => $data['contact']['phone'],
                 'contact_email' => $data['contact']['email'],
+                'contact_address' => $data['contact']['address'],
                 'applied_price_adult' => $schedule->price_adult,
                 'applied_price_children' => $schedule->price_child,
                 'number_of_adults' => $adultCount,
@@ -134,6 +147,7 @@ class BookingService
                 'payment_method' => $data['paymentMethod'],
                 'status'        => 'PENDING',
                 'note'          => $data['note'] ?? null,
+                'booking_date'  => $booking_date
             ]);
 
             // 3. Lưu danh sách hành khách vào bảng phụ (passengers)
@@ -147,17 +161,20 @@ class BookingService
                 ];
             }
             $booking->passengers()->createMany($passengers);
+            $uniquePaymentCode = 'PAYMENT_' . time() . '_' . Str::random(5);
 
             Payment::create([
                 'booking_id'     => $booking->booking_id, // Lấy ID nội bộ
                 'amount'         => $finalAmount,
                 'payment_method' => $data['paymentMethod'],
                 'transaction_id' => null,
+                'transaction_code' => $uniquePaymentCode,
                 'payment_status' => 'PENDING',
             ]);
+
+            Mail::to($booking->contact_email)->send(new BookingStatusMail($booking));
             return [
                 'message' => 'Đặt tour thành công, vui lòng thanh toán tại quầy!',
-                'payUrl'  => url("/booking-success?code=" . $booking->booking_code)
             ];
         });
     }
@@ -222,6 +239,7 @@ class BookingService
                 'contact_fullName'       => $data['contact']['fullName'],
                 'contact_phone'          => $data['contact']['phone'],
                 'contact_email'          => $data['contact']['email'],
+                'contact_address'        => $data['contact']['address'],
                 'applied_price_adult'    => $schedule->price_adult,
                 'applied_price_children' => $schedule->price_child,
                 'number_of_adults'       => $newAdultCount,
@@ -245,7 +263,7 @@ class BookingService
             }
             $booking->passengers()->createMany($passengers); // Insert lại danh sách mới
 
-            $payment = $booking->payments()->first();
+            $payment = $booking->payment;
 
             // Nếu đơn chưa thanh toán, chỉ cập nhật lại số tiền mới
             if ($payment && $payment->payment_status === 'PENDING') {
@@ -255,6 +273,7 @@ class BookingService
                 ]);
             }
 
+            Mail::to($booking->contact_email)->send(new BookingStatusMail($booking));
             return [
                 'message' => 'Cập nhật đơn hàng thành công!',
                 'booking' => $booking->fresh()
@@ -279,14 +298,14 @@ class BookingService
                 if ($booking->status !== 'PENDING') {
                     throw new Exception("Chỉ có đơn hàng đang chờ thanh toán mới có thể chuyển sang chờ xác nhận!");
                 }
-                $booking->payments()->update(['payment_status' => 'COMPLETED']);
+                $booking->payment()->update(['payment_status' => 'COMPLETED']);
                 $booking->status = 'VERIFYING';
                 break;
             case 'PAID':
                 if (!in_array($booking->status, ['PENDING', 'VERIFYING'])) {
                     throw new Exception("Chỉ có đơn hàng đang chờ thanh toán hoặc chờ xác nhận mới có thể chuyển sang đã thanh toán!");
                 }
-                $booking->payments()->update(['payment_status' => 'COMPLETED']);
+                $booking->payment()->update(['payment_status' => 'COMPLETED']);
                 $booking->status = 'PAID';
                 break;
             case 'CANCELLED':
@@ -296,7 +315,7 @@ class BookingService
                 $schedule = $booking->schedule;
                 $totalPassengers = $booking->number_of_adults + $booking->number_of_children;
                 $schedule->decrement('current_booked', $totalPassengers);
-                $booking->payments()->update(['payment_status' => 'REFUNDED']);
+                $booking->payment()->update(['payment_status' => 'REFUNDED']);
                 if ($booking->coupon_id) {
                     $booking->coupon()->decrement('usage_count');
                 }
@@ -309,7 +328,7 @@ class BookingService
                 $schedule = $booking->schedule;
                 $totalPassengers = $booking->number_of_adults + $booking->number_of_children;
                 $schedule->decrement('current_booked', $totalPassengers);
-                $booking->payments()->update(['payment_status' => 'FAILED']);
+                $booking->payment()->update(['payment_status' => 'EXPIRED']);
                 if ($booking->coupon_id) {
                     $booking->coupon()->decrement('usage_count');
                 }
@@ -321,6 +340,9 @@ class BookingService
 
         $booking->status = $newStatus;
         $booking->save();
+
+        Mail::to($booking->contact_email)->send(new BookingStatusMail($booking));
+
         return $booking;
     }
 }
