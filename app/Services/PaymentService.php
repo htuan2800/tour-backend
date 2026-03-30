@@ -204,13 +204,13 @@ class PaymentService
                     'transaction_id' => $data['transId'], // Cập nhật mã GD thật của MoMo
                 ]);
 
-                Log::info('MoMo IPN: Thanh toán thành công đơn ' . $booking->booking_code);
+                Log::info('MoMo IPN: Thanh toán thành công đơn ' . $booking->booking_id);
             } else {
                 $this->bookingService->updateStatus($booking->booking_id, 'CANCELLED');
                 $payment->update([
                     'payment_status' => 'FAILED',
                 ]);
-                Log::info('MoMo IPN: Khách hủy hoặc lỗi đơn ' . $booking->booking_code);
+                Log::info('MoMo IPN: Khách hủy hoặc lỗi đơn ' . $booking->booking_id);
             }
 
             return true;

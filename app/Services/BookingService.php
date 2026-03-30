@@ -64,17 +64,18 @@ class BookingService
 
         if ($search) {
             $query->where(function ($q) use ($search) {
-                $q->where('booking_code', 'LIKE', "%{$search}%")
+                $q->where('booking_id', 'LIKE', "%{$search}%")
                     ->orWhere('contact_fullName', 'LIKE', "%{$search}%")
                     ->orWhere('contact_phone', 'LIKE', "%{$search}%")
                     ->orWhere('contact_email', 'LIKE', "%{$search}%")
+                    ->orWhere('contact_address', 'LIKE', "%{$search}%")
                     ->orWhereHas('user.customer', function ($customerQuery) use ($search) {
                         $customerQuery->where('full_name', 'LIKE', "%{$search}%");
                     });
             });
         }
 
-        return $query->orderBy('booking_id', 'DESC')->paginate($limit);
+        return $query->orderBy('booking_date', 'DESC')->paginate($limit);
     }
 
     public function findBookingById(string $id)
