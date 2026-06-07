@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\Location;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-
+use Illuminate\Support\Facades\Log;
 class LocationService
 {
     private $cloudinaryService;
@@ -64,7 +64,10 @@ class LocationService
 
     public function findLocationById(string $id)
     {
-        return Location::where('location_id', $id)->first();
+        DB::enableQueryLog();
+        $location = Location::where('location_id', $id)->first();
+        Log::info('Query Log:', DB::getQueryLog());
+        return $location;
     }
 
 

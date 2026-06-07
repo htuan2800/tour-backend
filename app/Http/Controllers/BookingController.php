@@ -45,7 +45,7 @@ class BookingController extends Controller
     {
         // 1. Thu thập dữ liệu cần thiết từ Request
         $userId = Auth::user()->user_id; 
-        $filters = $request->only(['status', 'search']);
+        $filters = $request->only(['page', 'limit', 'status', 'search']);
 
         // 2. Gọi Service xử lý logic
         $bookings = $this->bookingService->getUserBookings($userId, $filters);
@@ -82,6 +82,14 @@ class BookingController extends Controller
             return $this->error('Đơn hàng không tồn tại hoặc không có quyền truy cập', 404);
         }
         return $this->success(new BookingDetailResource($booking), 'Thông tin booking', 200);
+    }
+
+    public function getBookingDetailForGuest(string $id) {
+        $booking = $this->bookingService->getBookingDetailForGuest($id);
+        if ($booking == null) {
+            return $this->error('Đơn hàng không tồn tại hoặc không có quyền truy cập', 404);
+        }
+        return $this->success(new BookingDetailResource($booking), 'Thông tin booking', 200);
     }
 
     public function create(BookingRequest $request)

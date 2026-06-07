@@ -79,7 +79,7 @@ class PaymentService
                 // ->has('customer')
                 ->first();
             $userId = $user?->user_id;
-
+            DB::enableQueryLog();
             $booking = Booking::create([
                 'user_id'       => $userId, // Lấy user_id từ token đã xác thực
                 'schedule_id'   => $schedule->schedule_id,
@@ -100,7 +100,7 @@ class PaymentService
                 'note'          => $data['note'] ?? null,
                 'booking_date'  => $booking_date,
             ]);
-
+            Log::info(DB::getQueryLog());
             // 3. Lưu danh sách hành khách vào bảng phụ (passengers)
             $passengers = [];
             foreach (array_merge($data['adults'], $data['children'] ?? []) as $p) {
@@ -143,7 +143,7 @@ class PaymentService
                 ]);
                 Mail::to($booking->contact_email)->send(new BookingStatusMail($booking));
                 return [
-                    'message' => 'Đặt tour thành công, vui lòng thanh toán tại quầy!',
+                    'message' => 'Đặt tour thành công, vui lòng kiểm tra email và thanh toán tại quầy!',
                 ];
             }
         });
@@ -206,7 +206,7 @@ class PaymentService
 
                 Log::info('MoMo IPN: Thanh toán thành công đơn ' . $booking->booking_id);
             } else {
-                $this->bookingService->updateStatus($booking->booking_id, 'CANCELLED');
+                // $this->bookingService->updateStatus($booking->booking_id, 'CANCELLED');
                 $payment->update([
                     'payment_status' => 'FAILED',
                 ]);

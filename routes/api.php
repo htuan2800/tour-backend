@@ -68,6 +68,7 @@ Route::group(['prefix' => 'payments'], function () {
 });
 
 Route::get('user-bookings/{id}', [BookingController::class, 'getBookingDetailForCustomer'])->middleware('auth:api');
+Route::get('guest-bookings/{id}', [BookingController::class, 'getBookingDetailForGuest']);
 Route::group(['middleware' => 'auth:api', 'prefix' => 'bookings'], function () {
     Route::get('user-bookings', [BookingController::class, 'getUserBookings']);
 });

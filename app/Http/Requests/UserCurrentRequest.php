@@ -7,6 +7,8 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use App\Traits\ApiResponse;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class UserCurrentRequest extends FormRequest
 {
@@ -28,12 +30,19 @@ class UserCurrentRequest extends FormRequest
 
     public function rules(): array
     {
+        /** @var \App\Models\User $user */
+        $user = Auth::guard('api')->user();
+        $profileTable = ($user->role->name === 'CUSTOMER') ? 'customers' : 'staff';
+        $userId = $user->user_id;
         return [
             'email'    => 'required|email', 
             'full_name' => 'required|string|max:100',
 
-            //staff/customer
-            'phone' => 'nullable|string',
+            'phone' => [
+                'nullable',
+                'string',
+                Rule::unique($profileTable, 'phone')->ignore($userId, 'user_id')
+            ],
             'address' => 'nullable|string',
             'date_of_birth' => 'nullable|date'
         ];
@@ -50,7 +59,8 @@ class UserCurrentRequest extends FormRequest
             'phone.string'    => 'Phone phải là chuỗi ký tự.',
             'address.string'  => 'Address phải là chuỗi ký tự.',
             'date_of_birth.date' => 'Date of birth phải là ngày.',
-            
+            'phone.string'    => 'Số điện thoại không hợp lệ.',
+            'phone.unique'    => 'Số điện thoại này đã được sử dụng.',
         ];
     }
 

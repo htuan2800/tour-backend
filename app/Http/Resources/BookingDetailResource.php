@@ -39,6 +39,13 @@ class BookingDetailResource extends JsonResource
 
         return [
             'booking_id'    => $this->booking_id,
+            'applied_price_adult' => $this->applied_price_adult,
+            'number_of_adults' => $this->number_of_adults,
+            'applied_price_children' => $this->applied_price_children,
+            'number_of_children' => $this->number_of_children,
+            'original_price' => $this->original_price,
+            'discount_amount' => $this->discount_amount,
+            'total_price' => $this->total_price,
             'schedule_id'   => (string) $this->schedule_id,
             'contact' => [
                 'fullName' => $this->contact_fullName ?? '',
@@ -46,8 +53,7 @@ class BookingDetailResource extends JsonResource
                 'email'    => $this->contact_email ?? '',
                 'address'  => $this->contact_address ?? '', // Thêm vào DB nếu có, không thì để chuỗi rỗng
             ],
-
-            'tour_schedule' => $this->schedule ? new TourScheduleResource($this->schedule) : null, // Thêm thông tin lịch trình tour nếu có
+            'tour_schedule' => $this->schedule ? new TourScheduleResource($this->schedule) : null, 
             // Nhóm Hành khách (Đã được chia mảng ở trên)
             'adults'   => $adults,
             'children' => $children,

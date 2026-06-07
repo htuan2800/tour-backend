@@ -20,18 +20,20 @@ class BookingService
     /**
      * Lấy danh sách booking của user kèm bộ lọc
      */
-    public function getUserBookings($userId, array $filters, $perPage = 10)
+    public function getUserBookings($userId, array $filters)
     {
+        DB::enableQueryLog();
+
         $query = Booking::with('schedule.tour')
             ->where('user_id', $userId)
             ->orderBy('booking_date', 'desc');
 
-        // Lọc theo Status (bỏ qua nếu status là 'all')
+        // Lọc theo Status
         if (!empty($filters['status']) && $filters['status'] !== 'all') {
             $query->where('status', $filters['status']);
         }
 
-        // Lọc theo Search (mã đơn hoặc tên tour)
+        // Lọc theo Search
         if (!empty($filters['search'])) {
             $search = $filters['search'];
             $query->where(function ($q) use ($search) {
@@ -42,16 +44,37 @@ class BookingService
             });
         }
 
-        return $query->paginate($perPage);
+        // TÍNH TOÁN PHÂN TRANG Ở ĐÂY
+        // Lấy limit từ request, nếu không có mặc định là 10 record / trang
+        $perPage = isset($filters['limit']) ? (int) $filters['limit'] : 10;
+
+        // Laravel sẽ TỰ ĐỘNG đọc tham số ?page=... trên URL, bạn không cần truyền 'page' vào hàm paginate()
+        $bookings = $query->paginate($perPage);
+
+        Log::info('Query Log:', DB::getQueryLog());
+
+        return $bookings;
     }
 
     public function getBookingDetailForCustomer($bookingId, $userId)
     {
-
-        return Booking::with(['schedule.tour', 'passengers', 'payment', 'coupon'])
+        DB::enableQueryLog();
+        $booking = Booking::with(['schedule.tour', 'passengers', 'payment', 'coupon'])
             ->where('user_id', $userId)
             ->where('booking_id', $bookingId) // Đừng quên thêm điều kiện tìm ID
             ->first();
+        Log::info('Query Log:', DB::getQueryLog());
+        return $booking;
+    }
+
+    public function getBookingDetailForGuest($bookingId)
+    {
+
+        $booking = Booking::with(['schedule.tour', 'passengers', 'payment', 'coupon'])
+            ->where('booking_id', $bookingId)
+            ->first();
+
+        return $booking;
     }
 
     public function getPagenatedBooking(int $limit, ?string $search, string $status = 'ALL')
@@ -80,7 +103,10 @@ class BookingService
 
     public function findBookingById(string $id)
     {
-        return Booking::with(['schedule.tour', 'passengers', 'payment', 'coupon'])->findOrFail($id);
+        DB::enableQueryLog();
+        $booking = Booking::with(['schedule.tour', 'passengers', 'payment', 'coupon'])->findOrFail($id);
+        Log::info('Query Log:', DB::getQueryLog());
+        return $booking;
     }
 
 
@@ -89,7 +115,7 @@ class BookingService
         return DB::transaction(function () use ($data) {
             $booking_date = now();
             $schedule = TourSchedule::findOrFail($data['schedule_id']);
-            if($schedule->departure_date < $booking_date) {
+            if ($schedule->departure_date < $booking_date) {
                 throw new Exception("Qúa hạn đặt tour!");
             }
             $adultCount = count($data['adults']);
@@ -183,6 +209,16 @@ class BookingService
     public function updateBooking(string $id, array $data)
     {
         $booking = Booking::findOrFail($id);
+
+        if ($booking->status === 'VERIFYING') {
+            $newTotalPassengers = count($data['adults']) + (isset($data['children']) ? count($data['children']) : 0);
+            $oldTotalPassengers = $booking->number_of_adults + $booking->number_of_children;
+
+            if ($newTotalPassengers !== $oldTotalPassengers) {
+                throw new Exception("Đơn hàng đang chờ đối soát, không được phép thay đổi số lượng vé.");
+            }
+        }
+
         return DB::transaction(function () use ($booking, $data) {
             $schedule = TourSchedule::findOrFail($data['schedule_id']);
 
@@ -191,25 +227,26 @@ class BookingService
             $newTotalPassengers = $newAdultCount + $newChildCount;
 
             $oldTotalPassengers = $booking->number_of_adults + $booking->number_of_children;
-            $passengerDiff = $newTotalPassengers - $oldTotalPassengers; // Độ chênh lệch
+            $passengerDiff = $newTotalPassengers - $oldTotalPassengers;
 
             // Nếu số người thay đổi, cập nhật lại số ghế trong Lịch trình
             if ($passengerDiff !== 0) {
+                $availableSeats = $schedule->max_capacity - $schedule->current_booked;
+                if ($passengerDiff > 0 && $passengerDiff > $availableSeats) {
+                    throw new Exception("Lịch trình này không còn đủ chỗ trống.");
+                }
                 $schedule->increment('current_booked', $passengerDiff);
             }
 
-            $originalAmount = ($newAdultCount * $schedule->price_adult) + ($newChildCount * $schedule->price_child);
+            $originalAmount = ($newAdultCount * $booking->applied_price_adult) + ($newChildCount * $booking->applied_price_children);
+
             $discountAmount = 0;
             $newCouponId = null;
 
             if (!empty($data['voucherCode'])) {
-                $coupon = Coupon::where('code', $data['voucherCode'])
-                    ->where('is_active', true)
-                    ->first();
-
+                $coupon = Coupon::where('code', $data['voucherCode'])->first();
                 if (!$coupon) throw new Exception("Mã giảm giá không hợp lệ.");
 
-                // Logic tính tiền giảm giá (Giữ nguyên của bạn)
                 if ($coupon->discount_type === 'PERCENT') {
                     $discountAmount = ($originalAmount * $coupon->discount_value) / 100;
                 } else {
@@ -222,11 +259,9 @@ class BookingService
 
             // Nếu mã giảm giá bị thay đổi hoặc bị gỡ bỏ
             if ($oldCouponId !== $newCouponId) {
-                // Hoàn lại 1 lượt cho mã CŨ (Nếu trước đó có dùng)
                 if ($oldCouponId) {
                     Coupon::where('coupon_id', $oldCouponId)->decrement('usage_count');
                 }
-                // Trừ đi 1 lượt của mã MỚI (Nếu có nhập mã mới)
                 if ($newCouponId) {
                     Coupon::where('coupon_id', $newCouponId)->increment('usage_count');
                 }
@@ -241,8 +276,8 @@ class BookingService
                 'contact_phone'          => $data['contact']['phone'],
                 'contact_email'          => $data['contact']['email'],
                 'contact_address'        => $data['contact']['address'],
-                'applied_price_adult'    => $schedule->price_adult,
-                'applied_price_children' => $schedule->price_child,
+
+
                 'number_of_adults'       => $newAdultCount,
                 'number_of_children'     => $newChildCount,
                 'original_price'         => $originalAmount,
@@ -262,7 +297,7 @@ class BookingService
                     'type'      => in_array($p, $data['adults']) ? 'ADULT' : 'CHILD'
                 ];
             }
-            $booking->passengers()->createMany($passengers); // Insert lại danh sách mới
+            $booking->passengers()->createMany($passengers);
 
             $payment = $booking->payment;
 
@@ -275,6 +310,7 @@ class BookingService
             }
 
             Mail::to($booking->contact_email)->send(new BookingStatusMail($booking));
+
             return [
                 'message' => 'Cập nhật đơn hàng thành công!',
                 'booking' => $booking->fresh()
@@ -295,6 +331,13 @@ class BookingService
         }
 
         switch ($newStatus) {
+            case 'PENDING':
+                if ($booking->status === 'PAID') {
+                    throw new Exception("Đơn hàng đã thanh toán, không thể chuyển về trạng thái chờ thanh toán!");
+                }
+                $booking->payment()->update(['payment_status' => 'PENDING']);
+                $booking->status = 'PENDING';
+                break;
             case 'VERIFYING':
                 if ($booking->status !== 'PENDING') {
                     throw new Exception("Chỉ có đơn hàng đang chờ thanh toán mới có thể chuyển sang chờ xác nhận!");

@@ -2,9 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\Tour;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\DB;  
+use Illuminate\Support\Facades\Log;
+use App\Models\Tour;
 
 class TourService
 {
@@ -83,7 +84,7 @@ class TourService
         return $query->paginate($perPage);
     }
 
-    public function searchTours(array $filters, $sortBy = 'nearest_date', $perPage = 10)
+    public function searchTours(array $filters, $sortBy = 'nearest_date')
     {
         $regionMapping = [
             'mien-bac' => 'Northern',
@@ -95,29 +96,32 @@ class TourService
         $query = Tour::with(['destinations', 'depart', 'schedules' => function ($q) {
             $q->where('departure_date', '>=', now())->orderBy('departure_date', 'asc')
                 ->where('status', 'OPEN');
-        }])->where('is_active', true);
+        }])
+            ->where('is_active', true)
+            ->whereHas('schedules', function ($q) {
+                $q->where('departure_date', '>=', now())
+                    ->where('status', 'OPEN');
+            });
 
         if (!empty($filters['slug'])) {
             $slug = $filters['slug'];
 
             // Kiểm tra xem slug truyền vào có phải là Vùng Miền không?
             if (array_key_exists($slug, $regionMapping)) {
-                
+
                 // NẾU LÀ VÙNG MIỀN: Tìm các tour có Điểm đến thuộc vùng này
-                $regionValue = $regionMapping[$slug]; 
-                
+                $regionValue = $regionMapping[$slug];
+
                 $query->whereHas('destinations', function ($q) use ($regionValue) {
                     // $q ở đây đại diện cho bảng locations
-                    $q->where('region', $regionValue); 
+                    $q->where('region', $regionValue);
                 });
-
             } else {
-                
+
                 // NẾU LÀ ĐỊA ĐIỂM: Tìm các tour có Điểm đến khớp chính xác với slug này
                 $query->whereHas('destinations', function ($q) use ($slug) {
                     $q->where('slug', $slug);
                 });
-
             }
         }
 
@@ -178,7 +182,13 @@ class TourService
                 break;
         }
 
-        return $query->paginate($perPage);
+        $results = $query->get();
+
+        DB::enableQueryLog();
+        $results = $query->get();
+        Log::info(DB::getQueryLog());
+
+        return $results;
     }
 
     public function getPagenatedTour(int $limit, ?string $search)
@@ -201,7 +211,7 @@ class TourService
 
     public function findTourForCustomerById(string $id)
     {
-        return Tour::query()
+        $tour = Tour::query()
             ->where('is_active', true)
             ->with([
                 // 1. SỬA: Lấy danh sách các điểm đến (Array)
@@ -224,6 +234,8 @@ class TourService
 
             ])
             ->findOrFail($id);
+
+        return $tour;
     }
 
     public function createTour(array $data)

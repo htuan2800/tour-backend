@@ -7,6 +7,7 @@ use App\Models\Tour;
 use App\Models\Payment;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class DashboardService
 {
@@ -34,29 +35,23 @@ class DashboardService
 
     private function getOverviewStats($start, $end)
     {
-        // Lấy các đơn hàng TRONG KỲ để tính Doanh thu, Số đơn, Số khách
         $bookingsInRange = Booking::whereBetween('booking_date', [$start, $end]);
+        $OverviewStats = [
+            // 1. NHÓM ĐÃ THANH TOÁN
+            'paid_revenue' => (clone $bookingsInRange)->where('status', 'PAID')->sum('total_price'),
+            'paid_count'   => (clone $bookingsInRange)->where('status', 'PAID')->count(),
 
-        return [
-            'total_revenue' => (clone $bookingsInRange)
-                ->whereIn('status', ['PAID']) // Chỉ tính tiền đơn thành công
-                ->sum('total_price'),
-
-            'new_bookings'  => (clone $bookingsInRange)->count(),
-
-            'total_passengers' => (clone $bookingsInRange)
-                ->sum(DB::raw('number_of_adults + number_of_children')),
-
-            // TIỀN CHỜ THU: Luôn lấy Real-time (Thời gian thực), bỏ qua bộ lọc ngày như đã thống nhất!
-            'pending_revenue' => Booking::whereIn('status', ['PENDING', 'VERIFYING'])
-                ->sum('total_price')
+            // 2. NHÓM CHỜ DUYỆT / CHỜ THANH TOÁN
+            'pending_revenue' => (clone $bookingsInRange)->whereIn('status', ['PENDING', 'VERIFYING'])->sum('total_price'),
+            'pending_count'   => (clone $bookingsInRange)->whereIn('status', ['PENDING', 'VERIFYING'])->count(),
         ];
+
+        return $OverviewStats;
+
     }
 
     private function getRevenueChart($start, $end, $isGroupByMonth)
     {
-        // Tùy biến format Group By (Theo tháng 'Y-m' hoặc theo ngày 'Y-m-d') 
-        // LƯU Ý: Cú pháp DATE_FORMAT dành cho MySQL. Nếu dùng PostgreSQL thì phải đổi hàm khác.
         $dateFormat = $isGroupByMonth ? '%Y-%m' : '%Y-%m-%d';
 
         $chartData = Booking::whereBetween('booking_date', [$start, $end])
@@ -69,10 +64,9 @@ class DashboardService
             ->orderBy('time_label', 'asc')
             ->get();
 
-        // Map lại data để đổi tên key cho khớp với Recharts ở Frontend
         return $chartData->map(function ($item) {
             return [
-                'month' => $item->time_label, // React đang dùng chữ 'month', nếu thích bạn có thể đổi thành 'date'
+                'month' => $item->time_label, 
                 'revenue' => (int) $item->revenue
             ];
         });
@@ -81,15 +75,19 @@ class DashboardService
     private function getTopTours($start, $end)
     {
         // Nối bảng Bookings -> TourSchedules -> Tours để đếm số đơn theo từng Tour
-        return DB::table('bookings')
+        DB::enableQueryLog();
+        $topTours= DB::table('bookings')
             ->join('tour_schedules', 'bookings.schedule_id', '=', 'tour_schedules.schedule_id')
             ->join('tours', 'tour_schedules.tour_id', '=', 'tours.tour_id')
             ->whereBetween('bookings.booking_date', [$start, $end])
+            ->where('bookings.status', 'PAID')
             ->select('tours.name', DB::raw('COUNT(bookings.booking_id) as bookings'))
             ->groupBy('tours.tour_id', 'tours.name')
             ->orderByDesc('bookings')
             ->limit(5)
             ->get();
+        Log::info('Query Log:', DB::getQueryLog());
+        return $topTours;
     }
 
     private function getPaymentMethodStats($start, $end)
@@ -107,7 +105,6 @@ class DashboardService
     private function getRecentBookings()
     {
         // Luôn lấy 5 giao dịch mới nhất bất chấp bộ lọc ngày
-        // Gọi kèm relationship `schedule.tour` để Frontend có tên tour in ra bảng
         return Booking::with(['schedule.tour'])
             ->orderByDesc('booking_date')
             ->limit(5)

@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class AuthController extends Controller
 {
@@ -77,7 +78,6 @@ class AuthController extends Controller
     // API lấy thông tin user
     public function me()
     {
-
         /** @var \App\Models\User $user */
         $user = Auth::guard('api')->user();
         $user->load(['customer', 'staff', 'role.permissions.feature']);
